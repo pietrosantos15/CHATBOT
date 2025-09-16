@@ -7,6 +7,8 @@ from uuid import uuid4 #Gera identificadores únicos para sessões de usuário.
 import os
 
 
+
+
 load_dotenv()
 
 instrucoes = """Você é o OrtoFix, um assistente virtual amigável, especialista em ortografia da Língua Portuguesa, e foi criado para ajudar alunos do ensino fundamental e médio. Sua principal função é tirar dúvidas de forma clara, objetiva e educativa.

@@ -73,7 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Função para conectar ao servidor
     function iniciarConversa() {
         if (socket && socket.connected) return;
-        socket = io('http://localhost:5000');
+        socket = io('https://chatbot-bte8.vercel.app/');
         socket.on('connect', () => {
             console.log('Conectado ao servidor Socket.IO! SID:', socket.id);
             connectionStatus.textContent = 'Conectado';

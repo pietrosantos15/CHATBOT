@@ -1,16 +1,16 @@
 {
-    "version": 2,
-    "builds": [
-      {
-        "src": "app.py",
-        "use": "@vercel/python"
-      }
-    ],
-    "routes": [
-      {
-        "src": "/(.*)",
-        "dest": "app.py"
-      }
-    ]
-  }
-  
+  "version": 2,
+  "builds": [
+    { "src": "api/index.py", "use": "@vercel/python" },
+    { "src": "index.html", "use": "@vercel/static" },
+    { "src": "script.js", "use": "@vercel/static" },
+    { "src": "style.css", "use": "@vercel/static" },
+    { "src": "img/*", "use": "@vercel/static" }
+  ],
+  "routes": [
+    { "src": "/socket.io/(.*)", "dest": "api/index.py" },
+    { "src": "/api/(.*)", "dest": "api/index.py" },
+    { "src": "/", "dest": "/index.html" },
+    { "src": "/(.*)", "dest": "/$1" }
+  ]
+}
