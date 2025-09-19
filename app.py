@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 from uuid import uuid4
 import os
 import re
+import eventlet
+eventlet.monkey_patch()
 
 load_dotenv()
 
