@@ -7,7 +7,45 @@ from uuid import uuid4
 import os
 import re
 import eventlet
-eventlet.monkey_patch()
+
+# ---------------- KEY MANAGER ----------------
+import ast
+
+class KeyManager:
+    """
+    Gerencia um pool de chaves de API, permitindo a troca para a próxima
+    chave disponível em caso de falha ou uso excessivo.
+    """
+    def __init__(self, key_env_var="GEMINI_API_KEYS"):
+        load_dotenv()
+        self.keys = self._load_keys(key_env_var)
+        self.current_key_index = 0
+        if not self.keys:
+            raise ValueError("Nenhuma chave de API encontrada na variável de ambiente.")
+
+    def _load_keys(self, key_env_var):
+        keys_str = os.getenv(key_env_var)
+        if keys_str:
+            try:
+                return ast.literal_eval(keys_str)
+            except (ValueError, SyntaxError) as e:
+                print(f"Erro ao ler as chaves do .env: {e}")
+                return []
+        return []
+
+    def get_current_key(self):
+        return self.keys[self.current_key_index]
+
+    def switch_key(self):
+        if len(self.keys) > 1:
+            self.current_key_index = (self.current_key_index + 1) % len(self.keys)
+            print(f"🔑 Chave de API trocada. Agora usando índice {self.current_key_index}")
+        else:
+            print("⚠️ Apenas uma chave disponível, não há outra para trocar.")
+
+    def get_all_keys(self):
+        return self.keys
+# -------------------------------------------------
 
 load_dotenv()
 
@@ -26,7 +64,10 @@ Quando um aluno fizer uma pergunta, siga estas regras:
 Se o aluno fizer uma pergunta sobre assuntos que não sejam de ortografia, responda de forma educada que sua especialidade é a ortografia da Língua Portuguesa e que você não tem conhecimento sobre o assunto. Só fale olá no começo da conversa, depois que o aluno estiver falando com você nao precisa ficar falando olá toda hora que começar uma nova frase. DE FORMA ALGUMA coloque ASTERISCOS nas respostas, volte apenas o texto. A RESPOSTA NAO PODE TER ASTERISCOS, TIRE TODOS OS ASTERISCOS POSSIVEIS
 """
 
-client = genai.Client(api_key=os.getenv("API_KEY"))
+# -------- Inicializa KeyManager e client --------
+key_manager = KeyManager()
+client = genai.Client(api_key=key_manager.get_current_key())
+# ------------------------------------------------
 
 app = Flask(__name__)
 app.secret_key = "chave"
@@ -36,7 +77,6 @@ active_chats = {}
 
 # ---------------- FUNÇÃO PARA LIMPAR MARKDOWN ----------------
 def limpar_formatacao(texto: str) -> str:
-    # Remove asteriscos, underlines, hashtags, crases
     texto = re.sub(r"[*_#`]", "", texto)
     return texto.strip()
 
@@ -73,33 +113,43 @@ def handle_connect():
 
 @socketio.on('enviar_mensagem')
 def handle_enviar_mensagem(data):
+    global client
     try:
         mensagem_usuario = data.get("mensagem")
         if not mensagem_usuario:
             emit('erro', {"erro": "Mensagem não pode ser vazia."})
             return
 
-        user_chat = get_user_chat()
-        resposta_gemini = user_chat.send_message(mensagem_usuario)
+        try:
+            user_chat = get_user_chat()
+            resposta_gemini = user_chat.send_message(mensagem_usuario)
 
-        resposta_texto = (
-            resposta_gemini.text
-            if hasattr(resposta_gemini, 'text')
-            else resposta_gemini.candidates[0].content.parts[0].text
-        )
+            resposta_texto = (
+                resposta_gemini.text
+                if hasattr(resposta_gemini, 'text')
+                else resposta_gemini.candidates[0].content.parts[0].text
+            )
 
-        # LIMPAR ANTES DE ENVIAR
-        resposta_texto = limpar_formatacao(resposta_texto)
+            resposta_texto = limpar_formatacao(resposta_texto)
 
-        emit('nova_mensagem', {
-            "remetente": "bot",
-            "texto": resposta_texto,
-            "session_id": session.get('session_id')
-        })
+            emit('nova_mensagem', {
+                "remetente": "bot",
+                "texto": resposta_texto,
+                "session_id": session.get('session_id')
+            })
+
+        except Exception as e:
+            # Se for erro de quota/limite (ex.: 429 Too Many Requests)
+            if "429" in str(e) or "quota" in str(e).lower():
+                key_manager.switch_key()
+                client = genai.Client(api_key=key_manager.get_current_key())
+                emit('erro', {"erro": "Chave trocada automaticamente, tente novamente."})
+            else:
+                emit('erro', {"erro": f"Ocorreu um erro no servidor: {str(e)}"})
 
     except Exception as e:
-        app.logger.error(f"Erro ao processar 'enviar_mensagem': {e}", exc_info=True)
-        emit('erro', {"erro": f"Ocorreu um erro no servidor: {str(e)}"})
+        app.logger.error(f"Erro em handle_enviar_mensagem: {e}", exc_info=True)
+        emit('erro', {"erro": f"Ocorreu um erro inesperado: {str(e)}"})
 
 @socketio.on('disconnect')
 def handle_disconnect():
