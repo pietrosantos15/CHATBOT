@@ -1,3 +1,6 @@
+import eventlet 
+eventlet.monkey_patch()
+
 from flask import Flask, request, session
 from flask_socketio import SocketIO, emit
 from google import genai
@@ -6,7 +9,8 @@ from dotenv import load_dotenv
 from uuid import uuid4
 import os
 import re
-import eventlet
+
+
 
 # ---------------- KEY MANAGER ----------------
 import ast
