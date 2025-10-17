@@ -1,7 +1,8 @@
 import eventlet 
 eventlet.monkey_patch()
 
-from flask import Flask, request, session
+# Importações principais e do Flask/SocketIO
+from flask import Flask, request, session, jsonify # Adicionado jsonify
 from flask_socketio import SocketIO, emit
 from google import genai
 from google.genai import types
@@ -9,12 +10,10 @@ from dotenv import load_dotenv
 from uuid import uuid4
 import os
 import re
-
-
-
-# ---------------- KEY MANAGER ----------------
 import ast
 
+# ---------------- KEY MANAGER (REDUZIDO PARA CLAREZA NO ARQUIVO PRINCIPAL) ----------------
+# A classe KeyManager é definida aqui. (O código foi mantido, apenas movido para a ordem correta)
 class KeyManager:
     """
     Gerencia um pool de chaves de API, permitindo a troca para a próxima
@@ -49,7 +48,7 @@ class KeyManager:
 
     def get_all_keys(self):
         return self.keys
-# -------------------------------------------------
+# ---------------- FIM DO KEY MANAGER ----------------
 
 load_dotenv()
 
@@ -73,11 +72,19 @@ key_manager = KeyManager()
 client = genai.Client(api_key=key_manager.get_current_key())
 # ------------------------------------------------
 
-app = Flask(__name__)
+# ---------------- INICIALIZAÇÃO DO FLASK E SOCKETIO ----------------
+app = Flask(__name__) # AGORA O 'app' ESTÁ DEFINIDO PRIMEIRO
 app.secret_key = "chave"
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 active_chats = {}
+
+# -------- ROTA PRINCIPAL PARA VERIFICAÇÃO DE SAÚDE DA API (Antigo 404) --------
+@app.route('/')
+def health_check():
+    """Retorna um status JSON para indicar que a API está ativa (Resolve o 404)."""
+    return jsonify({"status": "API Chatbot Online", "service": "OrtoFix API"}), 200
+# -----------------------------------------------------------------------------
 
 # ---------------- FUNÇÃO PARA LIMPAR MARKDOWN ----------------
 def limpar_formatacao(texto: str) -> str:
@@ -160,4 +167,5 @@ def handle_disconnect():
     print(f"Cliente desconectado: {request.sid}, session_id: {session.get('session_id', 'N/A')}")
 
 if __name__ == "__main__":
+    # Comando de desenvolvimento local, ignorado pelo Gunicorn no Render
     socketio.run(app, debug=True)
